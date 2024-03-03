@@ -1610,3 +1610,496 @@ mapfun.reduceBy(lambda x, y: (x[0] + y[0], x[1])).collect()
 
 from pyspark import __version__
 print(__version__)
+
+#%%
+
+# VALIDACIÓN INTERNA Y EXTERNA
+# ¿qué es la validación'
+# uso inteligente de los datos disponibles
+
+#%%
+
+# VALIDACIÓN EXTERNA
+
+import pandas as pd
+import bz2
+from sklearn.model_selection import train_test_split
+from sklearn import linear_model
+from sklearn.metrics import r2_score
+
+path = r'D:\DATOS\Users\jcgarciam\Downloads\archivos_base_python_data_science_big_data_esencial'
+
+with bz2.open(path + '/base_datos_2008.csv.bz2', 'rt') as archivo:
+    df = pd.read_csv(archivo)
+    
+#%%
+
+df = df.dropna(subset = ['ArrDelay'])
+df = df.sample(frac = 1).head(1000)
+
+x = df[['AirTime','Distance','DepDelay']]
+y = df['ArrDelay']
+
+#%%
+
+x_train, x_test, y_train, y_test = train_test_split(x,y, test_size = 0.2, random_state = 10)
+
+#%%
+# La validación interna nos permite ajustar todos los datos
+regrINTERNA = linear_model.LinearRegression()
+regrINTERNA.fit(x,y)
+prediccionesINTERNA = regrINTERNA.predict(x)
+print('R2:',r2_score(y, prediccionesINTERNA))
+
+# La validación externa nos hace ajustar solo un subconjunto de datos al modelo
+regrEXTERNA = linear_model.LinearRegression()
+regrEXTERNA.fit(x_train, y_train)
+prediccionesEXTERNA = regrEXTERNA.predict(x_test)
+print('R2:',r2_score(y_test, prediccionesEXTERNA))
+
+#%%
+
+# QUÉ ES Y CÓMO ACTÚA EL K-FOLD
+# La validación K-Fold lo que hace es repetir múltiples veces la validación externa
+# con difrenetes subconjutnos de entrenamiento
+import pandas as pd
+import bz2
+from sklearn.model_selection import KFold
+from sklearn import linear_model
+from sklearn.metrics import r2_score
+import numpy as np
+
+path = r'D:\DATOS\Users\jcgarciam\Downloads\archivos_base_python_data_science_big_data_esencial'
+
+with bz2.open(path + '/base_datos_2008.csv.bz2', 'rt') as archivo:
+    data = pd.read_csv(archivo)
+    
+#%%
+
+df = data.dropna(subset = ['ArrDelay'])
+df = df.sample(frac = 1).head(5000).reset_index()
+
+x = df[['AirTime','Distance','DepDelay']]
+y = df['ArrDelay']
+
+kf = KFold(n_splits = 10, shuffle = True) #n_split me dice cuántas particiones queremos y el shuffle permite mezclar los datos aleatoriamente con cada experimento
+
+kf.get_n_splits(x) #obtenemos las particiones concretas de nuestro conjunto de datos
+
+#%%
+# el siguiente çódigo hace la evaluación del rendimiento del modelo 
+# con diferentes subconjuntos y guardamos el R2 por cada modelo
+# Al final los promediamos
+regr = linear_model.LinearRegression()
+
+resultados = []
+
+for train_index, test_index in kf.split(x):
+    x_train, x_test = x.loc[train_index,], x.loc[test_index,]
+    y_train, y_test = y[train_index], y[test_index]
+    regr.fit(x_train, y_train)
+    predicciones = regr.predict(x_test)
+    print('R2:',r2_score(y_test, predicciones))
+    resultados.append(r2_score(y_test, predicciones))
+
+print('R2 medio:', np.mean(resultados))
+    
+
+#%%
+
+# LEAVE ONE OUTEN QUÉ CONSISTE
+# consiste en usar todos los datos menos uno para la validación
+import pandas as pd
+import bz2
+from sklearn.model_selection import LeaveOneOut
+from sklearn import linear_model
+import numpy as np
+
+path = r'D:\DATOS\Users\jcgarciam\Downloads\archivos_base_python_data_science_big_data_esencial'
+
+with bz2.open(path + '/base_datos_2008.csv.bz2', 'rt') as archivo:
+    data = pd.read_csv(archivo)
+
+#%%
+df = data.dropna(subset = ['ArrDelay'])
+df = df.sample(frac = 1).head(5000).reset_index()
+
+x = df[['AirTime','Distance','DepDelay']]
+y = df['ArrDelay']
+#%%
+
+loo = LeaveOneOut()
+regr = linear_model.LinearRegression()
+errores = []
+for train_index, test_index in loo.split(x):
+    x_train, x_test = x.loc[train_index,], x.loc[test_index,]
+    y_train, y_test = y[train_index], y[test_index]
+    regr.fit(x_train, y_train)
+    predicciones = regr.predict(x_test)
+    errores.append((y_test - predicciones[0])**2)
+    print('Error:', (float(y_test) - predicciones[0])**2)
+    
+#%%
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+sns.distplot(errores, kde = False, bins = 100)
+plt.hist(errores, bins = 100)
+plt.yscale('log')
+
+
+#%%
+
+# NEURAL NETWORKS
+# Las neuronas son cada uno de los elementos informativos que generamos a la hora
+# de intentar explicar nuestros outputs a través de nuestros inputs. Los enlaces
+# son las combinaciones lineales entre neuronas inputs y outputs. Este modelo
+# aprende automáticamente, no se necesita supervisar más allá de las capaz de le 
+# indican y algun otro paramétro, esto quiere decir que itera sobre nuestros datos
+# hasta que satisface unas funciones de pérdida, mínimas. Se necesita una función
+# de activación que es básicamente como arranca el algoritmo. Se debe definir el tipo 
+# de aprendizaje. Un inconveninete de este modelo es el coste computacional
+
+# Ventajas: Adaptativas (para todo tipo de distribución de datos), son totalmente
+# paralelizables (lo que permite distribuir el cálculo en distintos ordenadores o 
+# servidores), Toleracncia a fallos (si una de sus capas falla se puede ajustar el 
+# modelo), Potencial predictivo
+
+# Inconvenientes: Coste computacional(si tenemos muchos datos y queremos un modelo
+# muy complejo), Caja negra (No tenemos un control explícito de cómo estamos ajustando
+# los coeficientes de nuestras neuronas y tenemos una explicación intuitiva de qué
+# significa un coeficiente positivo o negativos en la capa número 37)
+
+#%%
+
+# NEURAL NETWORKS EN LA PRÁCTICA
+
+from sklearn.neural_network import MLPClassifier
+from sklearn.neural_network import MLPRegressor
+from sklearn.preprocessing import StandardScaler
+
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score
+import pandas as pd
+import bz2
+
+path = r'D:\DATOS\Users\jcgarciam\Downloads\archivos_base_python_data_science_big_data_esencial'
+
+with bz2.open(path + '/base_datos_2008.csv.bz2', 'rt') as archivo:
+    data = pd.read_csv(archivo)
+    
+#%%
+
+df = data.dropna(subset = ['AirTime','Distance','TaxiIn','TaxiOut','DepDelay'])
+df = df.sample(frac = 1).head(1000)
+
+#%%
+
+x = df[['AirTime','Distance','TaxiIn','TaxiOut','DepDelay']]
+y = df['ArrDelay']
+
+#%%
+x_train, x_test, y_train, y_test = train_test_split(x,y, test_size = 0.2, random_state = 10)
+
+#%%
+# Necesitamos escalar nuestros datos que es muy importante cuando se tiene
+# una red neuronal, ya que depende de la escala de la variable
+scaler = StandardScaler() #creamos un objeto que va a escalar nuestros datos
+scaler.fit(x_train) #entrenamos solo el conjunto training
+
+# lo aplicamos a los siguientes conjuntos
+x_train = scaler.transform(x_train)
+x_test = scaler.transform(x_test)
+
+#%%
+# función que ajusta la red neuronal.
+# solver es la forma en que resuelve el problema de optimización. Podemos
+# cambiarlo por 'Adam' o 'stochastic gradient descent'
+# alpha es la penalización que tenemos a la complejidad del modelo. Es importante
+# que no sea ni muy elevado ni muy pequeño, ya que nos controla el overfitting
+# de nuestro modelo.
+# hidden_layer_sizes es el número de capas ocultas con el que trabajamos y podemos
+# agregarle el número de neuronas que casi no se le coloca este paramétro.
+# Podríamos agregarle otro paramétro importante como, activation (ejemplo = 'logistic')
+# donde le podemos indicar alguna función para inicializar las capas ocultas, el 
+# predefinido es 'relu'.
+# Otro parámetro podría ser learning_rate para indicarle la velocidad de aprendizaje
+# por ejemplo: learning_rate = 'adaptative' que lo que va hacer es irse modificando
+# a medida que se acerque a cumplir la función objetivo, el valor por defecto es 
+# constant.
+# Otro paramétros podría ser el número de iteraciones máximo, ejem: max_iter = 1000000,
+# esto es útil si tenemos muchos datos y no queremos que el modelo tarde en sobreajustarse.
+# Otro parámetro sería warm_start = True, lo que obtenemos es que el modelo empieza
+# por la solución de la última vez que lo hemos ejecutado
+clf = MLPRegressor(solver = 'lbfgs', alpha = 1e-5, hidden_layer_sizes = (5,))
+
+model = clf.fit(x_train, y_train)
+
+predictions = model.predict(x_test)
+
+print('R cuadrado:',r2_score(y_test, predictions))
+
+#%%
+# XGBOOST Y LOS ÁRBOLES DE CLASIFICACIÓN
+# El XGBoost no deja de ser una evolución de los árboles de clasificación
+# y regresión donde no solamente estamos usando un árbol, sino que también
+# estamos juntando, mezclando varios árboles y usando unas funciones para 
+# evaluar cómo de bueno es nuestro modelo.
+
+#%%
+
+# XGBOOTS
+from xgboost import XGBRegressor
+from sklearn.preprocessing import StandardScaler
+
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score
+import pandas as pd
+import bz2
+
+path = r'D:\DATOS\Users\jcgarciam\Downloads\archivos_base_python_data_science_big_data_esencial'
+
+with bz2.open(path + '/base_datos_2008.csv.bz2', 'rt') as archivo:
+    data = pd.read_csv(archivo)
+    
+#%%
+
+df = data.dropna(subset = ['ArrDelay'])
+df = df.sample(frac = 1).head(10000)
+
+x = df[['AirTime','Distance','TaxiIn','TaxiOut','DepDelay']]
+y = df['ArrDelay']
+
+#%%
+
+x_train, x_test, y_train, y_test = train_test_split(x,y, test_size = 0.2, random_state = 10)
+
+#%%
+
+scaler = StandardScaler()
+scaler.fit(x_train)
+
+x_train = scaler.transform(x_train)
+x_test = scaler.transform(x_test)
+
+#%%
+
+model = XGBRegressor(n_jobs = -1, learning_rate = .5, max_depth = 2, # max_depth es la profundidad de los árboles
+                     colsample_bytree = 1, verbosity = 2, subsample = 1, # colsample_bytree es el porcentaje de columnas que queremos 
+                     n_estimators = 500) # el número de árboles que queremos
+
+model.fit(x_train, y_train)
+
+#%%
+
+predictions = model.predict(x_test)
+print('R cuadrado:',r2_score(predictions, y_test))
+
+#%%
+
+# SELECCIONAR EN MACHINE LEARNING VARIABLES
+
+from sklearn import linear_model
+import statsmodels.api as sm
+import pandas as pd 
+
+path = r'D:\DATOS\Users\jcgarciam\Downloads\archivos_base_python_data_science_big_data_esencial'
+
+with bz2.open(path + '/base_datos_2008.csv.bz2', 'rt') as archivo:
+    data = pd.read_csv(archivo)
+    
+#%%
+# Ajustamos un modelo conmuchas variables para validar si es necesario trabajar con todas
+df = data.dropna(subset = ['AirTime','Distance','TaxiIn','TaxiOut','DayOfWeek','DayofMonth',
+                           'Month','DepDelay','WeatherDelay'])
+df = df.sample(frac = 1).head(1000)
+
+#%%
+
+x = df[['AirTime','Distance','TaxiIn','TaxiOut','DayOfWeek','DayofMonth',
+                           'Month','DepDelay','WeatherDelay']]
+
+y = df['ArrDelay']
+
+regr = linear_model.LinearRegression()
+regr.fit(x, y)
+predicciones = regr.predict(x)
+
+#%%
+# podemos obtener un resumen estadístico similar al que tendríamos en R
+x2 = sm.add_constant(x)
+est = sm.OLS(y, x2)
+est2 = est.fit()
+print(est2.summary())
+
+#%%
+
+x = df[['AirTime','Distance','TaxiIn','TaxiOut',
+                           'DepDelay','WeatherDelay']]
+
+df['Month'] = df['Month'].apply(str)
+df['DayofMonth'] = df['DayofMonth'].apply(str)
+df['DayOfWeek'] = df['DayOfWeek'].apply(str)
+# Debemos convertir en variables dummies las variables categorias que son numeros
+dummies = pd.get_dummies(data = df[['Month','DayofMonth','DayOfWeek']])
+x = dummies.add(x, fill_value = 0)
+
+#%%
+
+y = df['ArrDelay']
+
+regr = linear_model.LinearRegression()
+regr.fit(x, y)
+predicciones = regr.predict(x)
+
+#%%
+x2 = sm.add_constant(x)
+est = sm.OLS(y, x2)
+est2 = est.fit()
+print(est2.summary())
+
+#%%
+
+# SELECCIÓN AUTOMATIZADA DE VARIABLES EN ML
+
+from sklearn.feature_selection import RFE
+from sklearn import linear_model
+import bz2
+import pandas as pd 
+
+path = r'D:\DATOS\Users\jcgarciam\Downloads\archivos_base_python_data_science_big_data_esencial'
+
+with bz2.open(path + '/base_datos_2008.csv.bz2', 'rt') as archivo:
+    data = pd.read_csv(archivo)
+    
+#%%
+
+df = data.dropna(subset = ['AirTime','Distance','TaxiIn','TaxiOut','DayOfWeek','DayofMonth',
+                           'Month','DepDelay','WeatherDelay'])
+df = df.sample(frac = 1).head(1000)
+
+#%%
+
+x = df[['AirTime','Distance','TaxiIn','TaxiOut','DayOfWeek','DayofMonth',
+                           'Month','DepDelay','WeatherDelay']]
+
+y = df['ArrDelay']
+
+regr = linear_model.LinearRegression()
+    
+#%%
+# la siguiente función permite encontrar las n variables más importantes para el modelo
+selector = RFE(estimator = regr, n_features_to_select = 5)
+selector.fit(x,y)
+print(selector.ranking_)
+print(x.columns[selector.support_])
+
+#%%
+# SELECCION DE PARÁMTEROS EN ML
+# ¿Cómo modelizar los paramétros para un proyecto de modelización?
+from sklearn.preprocessing import StandardScaler
+from sklearn.neural_network import MLPRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score
+
+import pandas as pd 
+
+path = r'D:\DATOS\Users\jcgarciam\Downloads\archivos_base_python_data_science_big_data_esencial'
+
+with bz2.open(path + '/base_datos_2008.csv.bz2', 'rt') as archivo:
+    data = pd.read_csv(archivo)
+
+#%%
+
+df = data.dropna(subset = ['AirTime','Distance','TaxiIn','TaxiOut','DepDelay'])
+df = df.sample(frac = 1).head(1000)
+x = df[['AirTime','Distance','TaxiIn','TaxiOut','DepDelay']]
+y = df['ArrDelay']
+
+x_train, x_test, y_train, y_test = train_test_split(x,y, test_size = 0.2, random_state = 1)
+
+scaler = StandardScaler()
+scaler.fit(x_train)
+
+x_train = scaler.transform(x_train)
+x_test = scaler.transform(x_test)
+
+#%%%
+# las siguientes listas permiten estudiar los parámtros del modelo
+alphas = [0.000001,0.0001,0.01,0.1] # parámetros de regularización
+layers = [2,5,10,50,100] # números de capas ocultas
+solvers = ['lbfgs','adam'] # cuál es el algoritmo para optimizar la red neuronal
+
+print(len(alphas) * len(layers) * len(solvers))
+
+#%%
+evaluaciones = []
+
+for alpha in alphas:
+    for layer in layers:
+        for solver in solvers:
+            clf = MLPRegressor(solver = solver, alpha = alpha, hidden_layer_sizes = (layer,), warm_start = True, max_iter = 100)
+            model = clf.fit(x_train, y_train)
+            predictions = model.predict(x_test)
+            evaluaciones.append('R cuadrado: ' + str(r2_score(y_test, predictions)) + ' solver: ' + str(solver) + ' layers: ' + str(layer) + ' alpha: ' + str(alpha))
+            
+#%%
+for i in evaluaciones:
+    print(i)
+    
+#%%
+
+# SELECCIÓN AUTOMATIZADA DE PARÁMETROS EN ML
+# Podemos automatizar la selección de parámetros para nuestro modelo
+from sklearn.model_selection import GridSearchCV # esta función busca los parámetros automaticamente
+from sklearn.preprocessing import StandardScaler
+from sklearn.neural_network import MLPRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score
+
+import pandas as pd 
+import bz2
+
+path = r'D:\DATOS\Users\jcgarciam\Downloads\archivos_base_python_data_science_big_data_esencial'
+
+with bz2.open(path + '/base_datos_2008.csv.bz2', 'rt') as archivo:
+    data = pd.read_csv(archivo)
+
+#%%
+
+
+df = data.dropna(subset = ['AirTime','Distance','TaxiIn','TaxiOut','DepDelay'])
+df = df.sample(frac = 1).head(1000)
+x = df[['AirTime','Distance','TaxiIn','TaxiOut','DepDelay']]
+y = df['ArrDelay']
+
+x_train, x_test, y_train, y_test = train_test_split(x,y, test_size = 0.2, random_state = 1)
+
+scaler = StandardScaler()
+scaler.fit(x_train)
+
+x_train = scaler.transform(x_train)
+x_test = scaler.transform(x_test)
+
+#%%
+
+parametros = {'alpha': [0.0001,0.01,0.00001],
+              'hidden_layer_sizes': [2,5,50,100],
+              'solver': ('lbfgs','adam'),
+              'learning_rate': ('constant','adaptive')}
+
+nn = MLPRegressor(warm_start = True, max_iter = 100000) # Se define la red neuronal, warm_start es para inicializar en el resultado anterior
+# Le decimos al programa que busque, con este modelo y estos parámetros, cuál es la mejor 
+# solución, cv es cross-validation (validación cruzada) con 5 bloques y que lo paralelice
+clf = GridSearchCV(nn, parametros, cv = 5, n_jobs = -1) 
+clf.fit(x, y)
+
+#%%
+# imprimimos los mejores parámteros para nuestro modelo
+print(clf.best_params_)
+
+#%%
+
+# FUNDAMENTOS DEL PRINCIPAL COMPONENT ANALYSIS (PCA)
+
+
